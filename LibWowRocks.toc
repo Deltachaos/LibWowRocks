@@ -1,0 +1,9 @@
+## Interface: 120105, 50504, 11509
+## Title: LibWowRocks
+## Notes: Lua 5.1 require/package for rocks vendored into World of Warcraft
+## Author: Maximilian Ruta
+## Version: @project-version@
+## Dependencies: LibStdShim
+## OptionalDeps: LibStub
+
+meta/lib.xml

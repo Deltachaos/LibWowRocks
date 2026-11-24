@@ -1,0 +1,9 @@
+package-as: LibWowRocks
+
+license-output: LICENSE
+
+ignore:
+  - tests
+  - "*.rockspec"
+
+enable-nolib-creation: no
