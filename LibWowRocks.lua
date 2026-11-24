@@ -4,7 +4,7 @@
   Standard-library shims live in LibStdShim-1.0 (libstdshim rock).
 ]]
 
-local MAJOR, MINOR = "WowRocks-1.0", 1
+local MAJOR, MINOR = "WowRocks-1.0", 2
 
 -- WoW loads this file from meta/lib.xml after LibStub and LibStdShim.
 -- luarocks/busted require() it, and then LibStdShim comes in as a module.
@@ -135,6 +135,17 @@ function package.seeall(env)
 	_setmetatable(env, { __index = _G })
 end
 
+local function init_alias(name)
+	return _string_match(name, "^(.*)%.init$")
+end
+
+local function sync_init_alias(name)
+	local base = init_alias(name)
+	if base then
+		package.loaded[base] = package.loaded[name]
+	end
+end
+
 local function require_name(name)
 	if _type(name) ~= "string" then
 		_error("bad argument #1 to 'require' (string expected, got " .. _type(name) .. ")", 3)
@@ -146,7 +157,16 @@ local function require_name(name)
 	if loaded ~= nil then
 		return loaded
 	end
-	local preload = package.preload[name]
+	-- foo/init.lua is registered as foo.init; require("foo") should find it.
+	local as_init = package.loaded[name .. ".init"]
+	if as_init == SENTINEL then
+		_error("loop or previous error loading module '" .. name .. "'", 3)
+	end
+	if as_init ~= nil then
+		package.loaded[name] = as_init
+		return as_init
+	end
+	local preload = package.preload[name] or package.preload[name .. ".init"]
 	if preload then
 		package.loaded[name] = SENTINEL
 		local ok, result = _pcall(preload, name)
@@ -159,6 +179,11 @@ local function require_name(name)
 		elseif package.loaded[name] == SENTINEL then
 			package.loaded[name] = true
 		end
+		sync_init_alias(name)
+		if init_alias(name) == nil and package.loaded[name .. ".init"] == nil then
+			-- preload was for name.init under require("name")
+			package.loaded[name .. ".init"] = package.loaded[name]
+		end
 		return package.loaded[name]
 	end
 	_error("module '" .. name .. "' not found", 3)
@@ -170,6 +195,10 @@ end
 
 function WowRocks._begin(name)
 	package.loaded[name] = SENTINEL
+	local base = init_alias(name)
+	if base and package.loaded[base] == nil then
+		package.loaded[base] = SENTINEL
+	end
 end
 
 function WowRocks._finish(name, value, explicit)
@@ -181,11 +210,13 @@ function WowRocks._finish(name, value, explicit)
 		else
 			package.loaded[name] = value
 		end
+		sync_init_alias(name)
 		return
 	end
 	if package.loaded[name] == SENTINEL then
 		package.loaded[name] = true
 	end
+	sync_init_alias(name)
 end
 
 function WowRocks.module(name, ...)
