@@ -13,11 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: leafo/gh-actions-lua@v10
+      - uses: leafo/gh-actions-lua@v13
         with:
           luaVersion: "5.1"
 
-      - uses: leafo/gh-actions-luarocks@v4
+      - uses: leafo/gh-actions-luarocks@v6
+        with:
+          luaRocksVersion: "3.13.0"
 
       - name: Install test dependencies
         run: luarocks test --prepare libwowrocks-scm-1.rockspec
