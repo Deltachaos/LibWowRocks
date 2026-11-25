@@ -1,0 +1,8 @@
+## Interface: 120105, 50504, 11509
+## Title: varpackage
+## Notes: Lua 5.1 require/package that loads source text through a getter
+## Author: Maximilian Ruta
+## Version: @project-version@
+## OptionalDeps: LibStub
+
+varpackage.lua

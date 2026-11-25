@@ -1,56 +1,69 @@
-# LibWowRocks
+# varpackage
 
-Lua 5.1 `require` / `package` for rocks vendored into World of Warcraft.
+Lua 5.1 `require` / `package` for environments that store module sources as strings instead of files.
 
-WoW has no `require` or `package`. LibWowRocks is that layer: a LibStub library (`WowRocks-1.0`) with `require`, `module`, and a `package` table. Standard-library gaps (`os`, `io`, `debug`, `bit32`, `load` / `loadfile` / `dofile`) come from [LibStdShim](https://github.com/Deltachaos/LibStdShim), which this rock depends on.
-
-wowrocks vendors this rock into an addon and rewrites other rocks so their `require` calls go through `WowRocks`. Because `libstdshim` is a dependency, that install brings the shims in too.
+`varpackage-1.0` is a LibStub factory. Calling it returns an isolated `require` function. Module text comes from a `get` function. Optional globals are written to `_G` only while a chunk runs, then restored.
 
 ## Install
 
-Copy this repository into your addon (or a libs folder). Load LibStdShim first, then `meta/lib.xml`:
-
-```xml
-<Include file="LibStdShim\meta\lib.xml"/>
-<Include file="LibWowRocks\meta\lib.xml"/>
-```
-
-`meta/lib.xml` loads `LibWowRocks.lua`. LibStdShim must already be registered as `LibStdShim-1.0`.
+Copy this repository into your addon (or a libs folder) and load `varpackage.lua` after LibStub. The included `.toc` does that.
 
 As a LuaRocks module:
 
 ```bash
-luarocks install libwowrocks
+luarocks install varpackage
 ```
-
-That pulls in `libstdshim`.
 
 ## Usage
 
 ```lua
-local WowRocks = LibStub("WowRocks-1.0")
-local json = WowRocks.require("dkjson")
-
-local Std = LibStub("LibStdShim-1.0")
-local now = Std.os.time()
+local requirestring = LibStub("varpackage-1.0")({
+    get = function(file)
+        return _G.__wowrocks[file]
+    end,
+    globals = {
+        os = Std.os,
+    },
+})
+local json = requirestring("dkjson")
 ```
 
-`WowRocks.os`, `WowRocks.io`, `WowRocks.debug`, `WowRocks.bit32`, `WowRocks.load`, `WowRocks.loadfile`, and `WowRocks.dofile` are the LibStdShim implementations. `require` of a standard-library name (`debug`, `os`, `io`, `bit32`, `table`, `string`, `math`, `coroutine`, `package`, `utf8`) returns the LibStdShim module when the shim provides it, and otherwise the host library. `require("package")` is this library's `package` table. A `package.preload` entry still wins.
-
-Without LibStub, requiring the module returns the library table:
+`get` as the first argument and `globals` as the second:
 
 ```lua
-local WowRocks = require("LibWowRocks")
+local requirestring = LibStub("varpackage-1.0")(function(file)
+    return _G.__wowrocks[file]
+end, {
+    os = Std.os,
+})
 ```
 
-Vendored rocks call `WowRocks._accept`, `WowRocks._begin`, and `WowRocks._finish` so a newer rock version replaces an older one and `require` sees the loaded module.
+Defaults when an option is omitted:
+
+- `get` is `function(file) return nil end`
+- `globals` is `{}`
+- `path` is `share/lua/5.1/?.lua;share/lua/5.1/?/init.lua`
+- `native` is `true`
+
+`LibStub("varpackage-1.0")()` is valid. With the defaults it uses the host `require` when one exists.
+
+`require` checks `package.loaded`, then a standard-library name, then walks `package.searchers` (aliased as `package.loaders`) the way Lua does. The default searchers are `package.preload`, then `path` templates through `get`, then the host `require` when `native` is on. Replacing or inserting searchers changes what `require` does. When `native` is on (the default), `package.loaded` and `package.preload` are Lua's own tables, so a later native `require` sees modules this instance loaded. Pass `native = false` for a private `package.loaded` / `package.preload` that do not read or write the host cache.
+
+Each factory call gets its own `package` table. The returned function has `require.package` and `require.module`.
+
+Without LibStub, requiring the module returns the same callable factory:
+
+```lua
+local varpackage = require("varpackage")
+local req = varpackage()
+```
 
 ## Tests
 
 Tests use [busted](https://lunarmodules.github.io/busted/).
 
 ```bash
-luarocks test --prepare libwowrocks-scm-1.rockspec
+luarocks test --prepare varpackage-scm-1.rockspec
 busted
 ```
 

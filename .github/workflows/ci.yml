@@ -22,7 +22,7 @@ jobs:
           luaRocksVersion: "3.13.0"
 
       - name: Install test dependencies
-        run: luarocks test --prepare libwowrocks-scm-1.rockspec
+        run: luarocks test --prepare varpackage-scm-1.rockspec
 
       - name: Run tests
         run: busted
@@ -30,7 +30,7 @@ jobs:
   publish:
     name: Publish to LuaRocks
     needs: test
-    if: github.event_name == 'push' && github.ref_type == 'tag' && github.repository == 'Deltachaos/LibWowRocks'
+    if: github.event_name == 'push' && github.ref_type == 'tag' && github.repository == 'Deltachaos/varpackage'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,8 +53,8 @@ jobs:
             echo "Tag must look like 1.2.3 (got ${tag})"
             exit 1
           fi
-          luarocks new-version --tag "$tag" libwowrocks-scm-1.rockspec
-          rockspec="libwowrocks-${tag}-1.rockspec"
+          luarocks new-version --tag "$tag" varpackage-scm-1.rockspec
+          rockspec="varpackage-${tag}-1.rockspec"
           test -f "$rockspec"
           luarocks lint "$rockspec"
           echo "ROCKSPEC=${rockspec}" >> "$GITHUB_ENV"
