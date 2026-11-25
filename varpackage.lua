@@ -144,8 +144,57 @@ local function new_require(first, second)
 		_error("varpackage: package.loadlib is not available", 2)
 	end
 
+	-- Injected globals live on a per-load frame. Assigning them on _G taints those
+	-- slots in WoW, and restoring the old value does not clear the taint.
+	local depth = 0
+	local frames = {}
+
+	local function push_globals()
+		local keys = {}
+		local values = {}
+		for key, value in _pairs(globals) do
+			keys[key] = true
+			values[key] = value
+		end
+		depth = depth + 1
+		frames[depth] = { keys = keys, values = values }
+	end
+
+	local function pop_globals()
+		frames[depth] = nil
+		depth = depth - 1
+	end
+
+	local function global_index(key)
+		local frame = frames[depth]
+		if frame and frame.keys[key] then
+			return frame.values[key]
+		end
+		return _G[key]
+	end
+
+	local function global_newindex(key, value)
+		local frame = frames[depth]
+		if frame and frame.keys[key] then
+			frame.values[key] = value
+			return
+		end
+		_G[key] = value
+	end
+
+	local function with_globals(fn)
+		push_globals()
+		local ok, result = _pcall(fn)
+		pop_globals()
+		return ok, result
+	end
+
 	function package.seeall(env)
-		_setmetatable(env, { __index = _G })
+		_setmetatable(env, {
+			__index = function(_, key)
+				return global_index(key)
+			end,
+		})
 	end
 
 	local function stdlib_module(name)
@@ -155,7 +204,7 @@ local function new_require(first, second)
 		if name == "package" then
 			return package
 		end
-		return _G[name]
+		return global_index(name)
 	end
 
 	local function dirsep()
@@ -207,19 +256,6 @@ local function new_require(first, second)
 		return package.loaded[name]
 	end
 
-	local function with_globals(fn)
-		local saved = {}
-		for key, value in _pairs(globals) do
-			saved[key] = _G[key]
-			_G[key] = value
-		end
-		local ok, result = _pcall(fn)
-		for key in _pairs(globals) do
-			_G[key] = saved[key]
-		end
-		return ok, result
-	end
-
 	local require_fn = {}
 	local module_fn
 	local chunk_env
@@ -230,7 +266,14 @@ local function new_require(first, second)
 				package = package,
 				module = module_fn,
 			}
-			_setmetatable(chunk_env, { __index = _G, __newindex = _G })
+			_setmetatable(chunk_env, {
+				__index = function(_, key)
+					return global_index(key)
+				end,
+				__newindex = function(_, key, value)
+					global_newindex(key, value)
+				end,
+			})
 		end
 		return chunk_env
 	end
