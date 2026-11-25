@@ -9,7 +9,7 @@ local MAJOR, MINOR = "WowRocks-1.0", 2
 -- WoW loads this file from meta/lib.xml after LibStub and LibStdShim.
 -- luarocks/busted require() it, and then LibStdShim comes in as a module.
 local libstub = _G.LibStub
-local loaded_as_module = select("#", ...) >= 1 and type((...)) == "string"
+local loaded_as_module = require ~= nil and select("#", ...) >= 1 and type((...)) == "string"
 
 local WowRocks
 if not libstub then
