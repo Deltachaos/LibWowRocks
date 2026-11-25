@@ -35,7 +35,7 @@ local Std = LibStub("LibStdShim-1.0")
 local now = Std.os.time()
 ```
 
-`WowRocks.os`, `WowRocks.io`, `WowRocks.debug`, `WowRocks.bit32`, `WowRocks.load`, `WowRocks.loadfile`, and `WowRocks.dofile` are the LibStdShim implementations. `require("bit32")` is preloaded with `WowRocks.bit32`.
+`WowRocks.os`, `WowRocks.io`, `WowRocks.debug`, `WowRocks.bit32`, `WowRocks.load`, `WowRocks.loadfile`, and `WowRocks.dofile` are the LibStdShim implementations. `require` of a standard-library name (`debug`, `os`, `io`, `bit32`, `table`, `string`, `math`, `coroutine`, `package`, `utf8`) returns the LibStdShim module when the shim provides it, and otherwise the host library. `require("package")` is this library's `package` table. A `package.preload` entry still wins.
 
 Without LibStub, requiring the module returns the library table:
 

@@ -4,7 +4,7 @@
   Standard-library shims live in LibStdShim-1.0 (libstdshim rock).
 ]]
 
-local MAJOR, MINOR = "WowRocks-1.0", 2
+local MAJOR, MINOR = "WowRocks-1.0", 4
 
 -- WoW loads this file from meta/lib.xml after LibStub and LibStdShim.
 -- luarocks/busted require() it, and then LibStdShim comes in as a module.
@@ -146,6 +146,35 @@ local function sync_init_alias(name)
 	end
 end
 
+-- Names Lua itself accepts in require. A LibStdShim field wins over the host
+-- library so WoW gets the shimmed os/io/debug/bit32/table implementations.
+local STDLIB = {
+	coroutine = true,
+	package = true,
+	string = true,
+	utf8 = true,
+	table = true,
+	math = true,
+	io = true,
+	os = true,
+	debug = true,
+	bit32 = true,
+}
+
+local function stdlib_module(name)
+	if not STDLIB[name] then
+		return nil
+	end
+	if name == "package" then
+		return package
+	end
+	local shimmed = Std[name]
+	if shimmed ~= nil then
+		return shimmed
+	end
+	return _G[name]
+end
+
 local function require_name(name)
 	if _type(name) ~= "string" then
 		_error("bad argument #1 to 'require' (string expected, got " .. _type(name) .. ")", 3)
@@ -185,6 +214,11 @@ local function require_name(name)
 			package.loaded[name .. ".init"] = package.loaded[name]
 		end
 		return package.loaded[name]
+	end
+	local std = stdlib_module(name)
+	if std ~= nil then
+		package.loaded[name] = std
+		return std
 	end
 	_error("module '" .. name .. "' not found", 3)
 end
@@ -251,9 +285,26 @@ WowRocks.bit32 = Std.bit32
 WowRocks.load = Std.load
 WowRocks.dofile = Std.dofile
 WowRocks.loadfile = Std.loadfile
-package.preload.bit32 = function()
-	return Std.bit32
+
+-- Rocks often use _G.package / _G.require (and sometimes _G.io) instead of bare
+-- locals. Fill only missing globals so WoW gets a Lua-like environment without
+-- clobbering a desktop host that already provides them.
+local function install_global(name, value)
+	if value ~= nil and _G[name] == nil then
+		_G[name] = value
+	end
 end
+
+install_global("package", package)
+install_global("require", WowRocks.require)
+install_global("module", WowRocks.module)
+install_global("os", Std.os)
+install_global("io", Std.io)
+install_global("debug", Std.debug)
+install_global("bit32", Std.bit32)
+install_global("load", Std.load)
+install_global("loadfile", Std.loadfile)
+install_global("dofile", Std.dofile)
 
 WowRocks.MAJOR = MAJOR
 WowRocks.MINOR = MINOR

@@ -7,7 +7,7 @@ describe("LibWowRocks", function()
 		local WowRocks = require("LibWowRocks")
 		assert.is_table(WowRocks)
 		assert.equals("WowRocks-1.0", WowRocks.MAJOR)
-		assert.equals(2, WowRocks.MINOR)
+		assert.equals(4, WowRocks.MINOR)
 		assert.is_function(WowRocks.require)
 		assert.is_table(WowRocks.package)
 		assert.is_table(WowRocks.os)
@@ -20,7 +20,7 @@ describe("LibWowRocks", function()
 		local Std = stub("LibStdShim-1.0")
 		assert.equals(stub("WowRocks-1.0"), WowRocks)
 		assert.equals("WowRocks-1.0", WowRocks.MAJOR)
-		assert.equals(2, WowRocks.MINOR)
+		assert.equals(4, WowRocks.MINOR)
 		assert.equals(Std.os, WowRocks.os)
 		assert.equals(Std.io, WowRocks.io)
 		assert.equals(Std.debug, WowRocks.debug)
@@ -33,7 +33,7 @@ describe("LibWowRocks", function()
 
 	it("keeps the existing library when the minor is not newer", function()
 		local WowRocks, stub = helper.fresh()
-		local again, old = stub:NewLibrary("WowRocks-1.0", 2)
+		local again, old = stub:NewLibrary("WowRocks-1.0", 4)
 		assert.is_nil(again)
 		assert.equals(WowRocks, stub("WowRocks-1.0"))
 		package.loaded.LibWowRocks = nil
@@ -59,6 +59,36 @@ describe("LibWowRocks", function()
 		local WowRocks = helper.fresh()
 		WowRocks.package.preload.empty = function() end
 		assert.equals(true, WowRocks.require("empty"))
+	end)
+
+	it("returns a standard library from the shim, otherwise the host", function()
+		local WowRocks, stub = helper.fresh()
+		local Std = stub("LibStdShim-1.0")
+		assert.equals(Std.debug, WowRocks.require("debug"))
+		assert.equals(Std.os, WowRocks.require("os"))
+		assert.equals(Std.io, WowRocks.require("io"))
+		assert.equals(Std.bit32, WowRocks.require("bit32"))
+		assert.equals(Std.table, WowRocks.require("table"))
+		assert.equals(string, WowRocks.require("string"))
+		assert.equals(math, WowRocks.require("math"))
+		assert.equals(coroutine, WowRocks.require("coroutine"))
+		assert.equals(WowRocks.package, WowRocks.require("package"))
+		assert.equals(Std.debug, WowRocks.package.loaded.debug)
+		assert.equals(Std.debug, WowRocks.require("debug"))
+
+		WowRocks.package.loaded.debug = nil
+		WowRocks.package.preload.debug = function()
+			return { custom = true }
+		end
+		assert.is_true(WowRocks.require("debug").custom)
+
+		if _G.utf8 ~= nil then
+			assert.equals(_G.utf8, WowRocks.require("utf8"))
+		else
+			local ok, err = pcall(WowRocks.require, "utf8")
+			assert.is_false(ok)
+			assert.is_truthy(tostring(err):find("module 'utf8' not found", 1, true))
+		end
 	end)
 
 	it("errors when the module is missing or the name is not a string", function()
@@ -126,4 +156,56 @@ describe("LibWowRocks", function()
 		WowRocks.package.seeall(env)
 		assert.equals(print, env.print)
 	end)
+
+	it("installs package/require/os/io onto _G when missing", function()
+		helper.clear_loaded()
+		local stub = helper.make_libstub()
+		_G.LibStub = stub
+		require("LibStdShim")
+		local saved = {
+			package = _G.package,
+			require = _G.require,
+			module = _G.module,
+			os = _G.os,
+			io = _G.io,
+			debug = _G.debug,
+			bit32 = _G.bit32,
+		}
+		_G.package, _G.require, _G.module = nil, nil, nil
+		_G.os, _G.io, _G.debug, _G.bit32 = nil, nil, nil, nil
+		local got = {}
+		local ok, err = pcall(function()
+			dofile("LibWowRocks.lua")
+			local WowRocks = stub("WowRocks-1.0")
+			got.WowRocks = WowRocks
+			got.package = _G.package
+			got.require = _G.require
+			got.module = _G.module
+			got.os = _G.os
+			got.io = _G.io
+			got.debug = _G.debug
+			got.bit32 = _G.bit32
+			got.sep = _G.package.config:sub(1, 1)
+		end)
+		for name, value in pairs(saved) do
+			_G[name] = value
+		end
+		assert.equals(true, ok, err)
+		assert.equals(got.WowRocks.package, got.package)
+		assert.equals(got.WowRocks.require, got.require)
+		assert.equals(got.WowRocks.module, got.module)
+		assert.equals(got.WowRocks.os, got.os)
+		assert.equals(got.WowRocks.io, got.io)
+		assert.equals(got.WowRocks.debug, got.debug)
+		assert.equals(got.WowRocks.bit32, got.bit32)
+		assert.equals("/", got.sep)
+	end)
+
+	it("does not replace an existing host package global", function()
+		local host_package = _G.package
+		local WowRocks = helper.fresh()
+		assert.equals(host_package, _G.package)
+		assert.not_equals(WowRocks.package, _G.package)
+	end)
+
 end)
